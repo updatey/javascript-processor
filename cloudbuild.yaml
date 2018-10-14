@@ -1,0 +1,5 @@
+steps:
+- name: 'node:10'
+  args: ['npm', 'install']
+- name: 'node:10'
+  args: ['npm', 'test']
