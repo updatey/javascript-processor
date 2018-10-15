@@ -1,23 +1,18 @@
 {
   "name": "javascript-processor",
-  "version": "1.0.0",
-  "description": "",
+  "description": "This cloud function processes events both from npm registry changes, and github triggering all sorts of fun workflows",
   "main": "src/index.js",
   "scripts": {
-    "deploy": "gcloud functions deploy javascriptProcessor --project updateyapp",
+    "deploy": "gcloud functions deploy javascriptProcessor --project updateyapp && gcloud functions deploy npmEvent --project updateyapp",
     "test": "nyc mocha",
     "fix": "semistandard --fix --env mocha"
   },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
+  "author": "Justin Beckwith <justin.beckwith@gmail.com>",
+  "license": "MIT",
   "devDependencies": {
     "codecov": "^3.1.0",
     "mocha": "^5.2.0",
     "nyc": "^13.0.1",
     "semistandard": "^12.0.1"
-  },
-  "dependencies": {
-    "nano": "^7.1.0"
   }
 }
