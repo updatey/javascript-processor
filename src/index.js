@@ -1,3 +1,6 @@
+const Firestore = require('@google-cloud/firestore');
+const db = new Firestore();
+const modules = db.collection('npm-modules');
 
 /**
  * @interface javascriptEvent
@@ -19,8 +22,9 @@ exports.javascriptProcessor = (event, context) => {
  * @property {string} version
  */
 
-exports.npmEvent = (event, context) => {
+exports.npmEvent = async (event, context) => {
   const message = event.data;
   const data = JSON.parse(Buffer.from(message, 'base64').toString());
   console.log(data);
+  await modules.doc(data.name).set(data);
 }
