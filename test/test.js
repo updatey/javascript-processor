@@ -7,12 +7,19 @@ const evt = require('./fixtures/fakeJSEvent.json');
 class MockFirestoreCollection {
   constructor () {
     this.values = new Map();
+    this.docs = new Map();
   }
   doc (name) {
-    return new MockFirestoreDoc();
+    if (!this.docs.has(name)) {
+      this.docs.set(name, new MockFirestoreDoc())
+    }
+    return this.docs.get(name);
   }
   async set (name, value) {
     this.values.set(name, value);
+  }
+  async get (name) {
+    return this.values.get(name);
   }
 }
 
@@ -33,7 +40,7 @@ const service = proxyquire('../src/index.js', {
 });
 
 describe('javascript-processor', () => {
-  it('should update dependencies', async () => {
+  it('should store dependencies', async () => {
     const basePath = 'https://api.github.com';
     const ghPath = `/repos/${evt.repo}/contents/${evt.file}`;
     const scope = nock(basePath).get(ghPath).reply(200, pkg);
@@ -42,6 +49,24 @@ describe('javascript-processor', () => {
     };
     await service.javascriptProcessor(event);
     scope.done();
-    assert(true);
+
+    // ensure all 7 modules in the fixture response are found
+    const npmModules = service.db.collection('npm-modules');
+    assert.strictEqual(npmModules.docs.size, 7);
+
+    // ensure the cloudcats package.json is the only one
+    const codecov = npmModules.doc('codecov');
+    const packageFiles = codecov.collection('packageFiles');
+    assert.strictEqual(packageFiles.values.size, 1);
+
+    // ensure it finds the right value
+    const packageFile = packageFiles.values.get('JustinBeckwith/cloudcats/package.json');
+    assert.strictEqual(packageFile.version, '^3.1.0');
+  });
+});
+
+describe('npm-events', () => {
+  it('should find all relevant packages', async () => {
+
   });
 });

@@ -2,6 +2,7 @@ const Firestore = require('@google-cloud/firestore');
 const axios = require('axios');
 
 const db = new Firestore();
+exports.db = db;
 
 /**
  * @interface javascriptEvent
@@ -35,7 +36,7 @@ exports.javascriptProcessor = async (event, context) => {
           .collection('packageFiles')
           .set(docPath, {
             path: docPath,
-            version: packageJson.dependencies[dep]
+            version: packageJson[deps][dep]
           });
       });
     }
