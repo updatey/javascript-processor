@@ -52,11 +52,16 @@ exports.javascriptProcessor = async (event, context) => {
 };
 
 /**
- * @interface npmEvent
+ * @interface NpmEvent
  * @property {string} name
  * @property {string} version
  */
 
+/**
+ * Invoked when an npm module is updated, triggered via the npm registry.
+ * @param event {NpmEvent} The { name, version } combo of the updated npm module
+ * @param context {🤷‍♂️}
+ */
 exports.npmEvent = async (event, context) => {
   const message = event.data;
   const data = JSON.parse(Buffer.from(message, 'base64').toString());
@@ -75,6 +80,10 @@ exports.npmEvent = async (event, context) => {
 
 /**
  * Check to see if a dependency requires an update
+ * @param {string} packageFile The path to the package.json to be updated
+ * @param {string} dep The name of the npm module to be updated
+ * @param {string} version The currently used version of the dependency in package.json
+ * @returns {Promise<void>}
  */
 exports.updateIfNeeded = async (packageFile, dep, version) => {
   const {data} = await axios.get(`https://registry.npmjs.org/${dep}`);
@@ -87,6 +96,56 @@ exports.updateIfNeeded = async (packageFile, dep, version) => {
   }
   const needs = !semver.satisfies(latest, version);
   if (needs) {
-    console.log(`Updating ${dep} in package ${packageFile}`);
+    let prefix = '';
+    if (version.startsWith('~')) {
+      prefix = '~';
+    } else if (version.startsWith('^')) {
+      prefix = '^';
+    }
+    const newVersion = prefix + latest;
+    console.log(`Updating ${dep} in package ${packageFile} from ${version} to ${newVersion}`);
+    exports.sendPR(packageFile);
   }
+};
+
+/**
+ * Checks to see if a PR for the given version exists, and if not,
+ * sends a new PR to update the module.
+ * @param packageFile {string} The path to the package.json to be updated.
+ * @param dep {string} The npm module to be udpated
+ * @param version {string} The new version for the given dependency
+ * @returns {Promise<void>}
+ */
+exports.sendPR = async (packageFile, dep, version) => {
+
+  // Check to see if we've already sent a PR for this packageFile/dep combo
+  const records = await db.collection('prs')
+    .where('path', '==', packageFile)
+    .where('dep', '==', dep)
+    .get();
+
+  if (records.length === 0) {
+    // There are no PRs on file for this combo.  Go ahead and send one!
+    return;
+  }
+
+  // We have already sent a PR. Let's check the current status.
+  const pr = records[0].data();
+
+  if (pr.closed) {
+    // This PR was opened, and then closed.  Move along.
+    return;
+  }
+
+  if (pr.hasUserCommits) {
+    // This PR has commits from someone that ain't us. Move along.
+    return;
+  }
+
+  if (pr.newVersion !== version) {
+    // The submitted PR is for a different version than the current PR that's
+    // open.  Let's push another commit to the existing PR.
+    return;
+  }
+
 };
