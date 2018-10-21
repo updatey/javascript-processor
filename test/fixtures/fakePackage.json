@@ -4,7 +4,7 @@
   "main": "src/index.js",
   "scripts": {
     "deploy": "gcloud functions deploy javascriptProcessor --project updateyapp && gcloud functions deploy npmEvent --project updateyapp",
-    "test": "nyc mocha test/test.js",
+    "test": "nyc mocha",
     "fix": "semistandard --fix --env mocha"
   },
   "author": "Justin Beckwith <justin.beckwith@gmail.com>",
@@ -14,7 +14,6 @@
     "mocha": "^5.2.0",
     "nock": "^10.0.1",
     "nyc": "^13.0.1",
-    "proxyquire": "^2.1.0",
     "semistandard": "^12.0.1"
   },
   "dependencies": {
