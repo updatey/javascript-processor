@@ -33,7 +33,6 @@ exports.javascriptProcessor = async (event, context) => {
       await Promise.all(
         Object.keys(packageJson[deps]).map(async dep => {
           try {
-            console.log(`Updating dep: ${dep}`);
             const version = packageJson[deps][dep];
             await db.collection('npm-modules')
               .doc(dep)
@@ -42,7 +41,7 @@ exports.javascriptProcessor = async (event, context) => {
                 path: docPath,
                 version
               });
-            const update = await exports.updateIfNeeded(dep, version);
+            await exports.updateIfNeeded(docPath, dep, version);
           } catch (e) {
             console.error(e);
           }
@@ -61,19 +60,23 @@ exports.javascriptProcessor = async (event, context) => {
 exports.npmEvent = async (event, context) => {
   const message = event.data;
   const data = JSON.parse(Buffer.from(message, 'base64').toString());
-  console.log(data);
+  const dep = data.name;
   // query all repos that use this package
-  const snapshot = await db.collection('npm-modules').doc(data.name).collection('packageFiles');
-  snapshot.forEach(doc => {
-    console.log(JSON.stringify(doc));
-  });
+  const snapshot = await db.collection('npm-modules').doc(dep).collection('packageFiles').get();
+  // TODO: this may need to be throttled with p-queue
+  await Promise.all(
+    snapshot.map(async doc => {
+      const packageFile = doc.data().path;
+      const version = doc.data().version;
+      await exports.updateIfNeeded(packageFile, dep, version);
+    })
+  );
 };
 
 /**
  * Check to see if a dependency requires an update
  */
-exports.updateIfNeeded = async (dep, version) => {
-  console.log(dep);
+exports.updateIfNeeded = async (packageFile, dep, version) => {
   const {data} = await axios.get(`https://registry.npmjs.org/${dep}`);
   if (!data['dist-tags']) {
     return;
@@ -83,5 +86,7 @@ exports.updateIfNeeded = async (dep, version) => {
     return;
   }
   const needs = !semver.satisfies(latest, version);
-  return needs;
+  if (needs) {
+    console.log(`Updating ${dep} in package ${packageFile}`);
+  }
 };

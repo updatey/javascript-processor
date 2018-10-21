@@ -6,18 +6,30 @@ const pkg = require('./fixtures/fakePackage.json');
 const evt = require('./fixtures/fakeJSEvent.json');
 const npmEvent = require('./fixtures/fakeNpmEvent.json');
 
-//nock.disableNetConnect();
+nock.disableNetConnect();
 
-class MockFirestoreCollection extends Map {
+class MockFirestoreCollection {
   constructor () {
-    super();
-    this.docs = new Map();
+    this.data = new Map();
   }
   doc (name) {
-    if (!this.docs.has(name)) {
-      this.docs.set(name, new MockFirestoreDoc())
+    if (!this.data.has(name)) {
+      this.data.set(name, new MockFirestoreDoc())
     }
-    return this.docs.get(name);
+    return this.data.get(name);
+  }
+  async get() {
+    return [...this.data.keys()].map(key => {
+      return {
+        id: key,
+        data: () => {
+          return this.data.get(key);
+        }
+      }
+    });
+  }
+  async set(key, value) {
+    this.data.set(key, value);
   }
 }
 
@@ -33,8 +45,16 @@ class MockFirestoreDoc {
   }
 }
 
-const service = proxyquire('../src/index.js', {
+const service = proxyquire('../src', {
   '@google-cloud/firestore': MockFirestoreDoc
+});
+
+let sandbox;
+beforeEach(() => {
+  sandbox = sinon.createSandbox();
+});
+afterEach(() => {
+  sandbox.restore();
 });
 
 describe('javascript-processor', () => {
@@ -42,24 +62,31 @@ describe('javascript-processor', () => {
     const basePath = 'https://api.github.com';
     const ghPath = `/repos/${evt.repo}/contents/${evt.file}`;
     const scope = nock(basePath).get(ghPath).reply(200, pkg);
+    const stub = sandbox.stub(service, 'updateIfNeeded').resolves();
     const event = {
       data: Buffer.from(JSON.stringify(evt), 'utf8')
     };
     await service.javascriptProcessor(event);
+
+    // ensure the API call to GitHub actually happened
     scope.done();
 
+    // ensure the `updateIfNeeded` method was invoked
+    assert(stub.called);
+
     // ensure all 7 modules in the fixture response are found
-    const npmModules = service.db.collection('npm-modules');
-    assert.strictEqual(npmModules.docs.size, 7);
+    const npmModules = await service.db.collection('npm-modules').get();
+    assert.strictEqual(npmModules.length, 7);
 
     // ensure the cloudcats package.json is the only one
-    const codecov = npmModules.doc('codecov');
-    const packageFiles = codecov.collection('packageFiles');
-    assert.strictEqual(packageFiles.size, 1);
+    const codecov = service.db.collection('npm-modules').doc('codecov');
+    const packageFiles = await codecov.collection('packageFiles').get();
+    assert.strictEqual(packageFiles.length, 1);
 
     // ensure it finds the right value
-    const packageFile = packageFiles.get('JustinBeckwith/cloudcats/package.json');
-    assert.strictEqual(packageFile.version, '^3.1.0');
+    const packageFile = packageFiles[0];
+    assert.strictEqual(packageFile.id, 'JustinBeckwith/cloudcats/package.json');
+    assert.strictEqual(packageFile.data().version, '^3.1.0');
   });
 });
 
@@ -69,9 +96,11 @@ describe('npm-events', () => {
     const event = {
       data: Buffer.from(JSON.stringify(npmEvent), 'utf8')
     };
-    // const spy = sinon.spy(service, 'updateIfNeeded');
+    const stub = sandbox.stub(service, 'updateIfNeeded').resolves();
     await service.npmEvent(event);
-    // assert.strictEqual(spy.calledOnce, true);
+    assert.strictEqual(stub.called, true);
+
+    // TODO: go beyond basic tests to verify the times called
   });
 
 });
