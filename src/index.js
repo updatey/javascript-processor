@@ -1,9 +1,7 @@
 const Firestore = require('@google-cloud/firestore');
 const axios = require('axios');
-const nano = require('nano');
 const semver = require('semver');
 
-const npm = nano('https://skimdb.npmjs.com/registry');
 const db = new Firestore();
 exports.db = db;
 
@@ -36,7 +34,6 @@ exports.javascriptProcessor = async (event, context) => {
         Object.keys(packageJson[deps]).map(async dep => {
           try {
             console.log(`Updating dep: ${dep}`);
-            if (dep === '@google-cloud/firestore') return;
             const version = packageJson[deps][dep];
             await db.collection('npm-modules')
               .doc(dep)
@@ -46,9 +43,9 @@ exports.javascriptProcessor = async (event, context) => {
                 version
               });
             const update = await exports.updateIfNeeded(dep, version);
-            } catch (e) {
-              console.error(e);
-            }
+          } catch (e) {
+            console.error(e);
+          }
         })
       );
     }
@@ -76,11 +73,12 @@ exports.npmEvent = async (event, context) => {
  * Check to see if a dependency requires an update
  */
 exports.updateIfNeeded = async (dep, version) => {
-  const d = await npm.get(dep);
-  if (!d['dist-tags']) {
+  console.log(dep);
+  const {data} = await axios.get(`https://registry.npmjs.org/${dep}`);
+  if (!data['dist-tags']) {
     return;
   }
-  const {latest} = d['dist-tags'];
+  const {latest} = data['dist-tags'];
   if (!latest) {
     return;
   }

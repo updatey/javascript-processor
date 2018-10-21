@@ -20,7 +20,7 @@
   },
   "dependencies": {
     "@google-cloud/firestore": "^0.17.0",
-    "nano": "^7.1.0",
+    "axios": "^0.18.0",
     "semver": "^5.6.0"
   }
 }
