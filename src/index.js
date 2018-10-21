@@ -1,6 +1,9 @@
 const Firestore = require('@google-cloud/firestore');
 const axios = require('axios');
+const nano = require('nano');
+const semver = require('semver');
 
+const npm = nano('https://skimdb.npmjs.com/registry');
 const db = new Firestore();
 exports.db = db;
 
@@ -27,20 +30,29 @@ exports.javascriptProcessor = async (event, context) => {
   const url = `https://api.github.com/repos/${data.repo}/contents/${data.file}`;
   const res = await axios.get(url);
   const packageJson = res.data;
-  ['dependencies', 'devDependencies'].forEach(deps => {
+  await Promise.all(['dependencies', 'devDependencies'].map(async deps => {
     if (packageJson[deps]) {
-      Object.keys(packageJson[deps]).forEach(async dep => {
-        console.log(`Updating dep: ${dep}`);
-        await db.collection('npm-modules')
-          .doc(dep)
-          .collection('packageFiles')
-          .set(docPath, {
-            path: docPath,
-            version: packageJson[deps][dep]
-          });
-      });
+      await Promise.all(
+        Object.keys(packageJson[deps]).map(async dep => {
+          try {
+            console.log(`Updating dep: ${dep}`);
+            if (dep === '@google-cloud/firestore') return;
+            const version = packageJson[deps][dep];
+            await db.collection('npm-modules')
+              .doc(dep)
+              .collection('packageFiles')
+              .set(docPath, {
+                path: docPath,
+                version
+              });
+            const update = await exports.updateIfNeeded(dep, version);
+            } catch (e) {
+              console.error(e);
+            }
+        })
+      );
     }
-  });
+  }));
 };
 
 /**
@@ -58,4 +70,20 @@ exports.npmEvent = async (event, context) => {
   snapshot.forEach(doc => {
     console.log(JSON.stringify(doc));
   });
+};
+
+/**
+ * Check to see if a dependency requires an update
+ */
+exports.updateIfNeeded = async (dep, version) => {
+  const d = await npm.get(dep);
+  if (!d['dist-tags']) {
+    return;
+  }
+  const {latest} = d['dist-tags'];
+  if (!latest) {
+    return;
+  }
+  const needs = !semver.satisfies(latest, version);
+  return needs;
 };

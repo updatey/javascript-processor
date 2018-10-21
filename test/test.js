@@ -1,12 +1,16 @@
 const assert = require('assert');
 const nock = require('nock');
+const sinon = require('sinon');
 const proxyquire = require('proxyquire');
 const pkg = require('./fixtures/fakePackage.json');
 const evt = require('./fixtures/fakeJSEvent.json');
+const npmEvent = require('./fixtures/fakeNpmEvent.json');
 
-class MockFirestoreCollection {
+//nock.disableNetConnect();
+
+class MockFirestoreCollection extends Map {
   constructor () {
-    this.values = new Map();
+    super();
     this.docs = new Map();
   }
   doc (name) {
@@ -14,12 +18,6 @@ class MockFirestoreCollection {
       this.docs.set(name, new MockFirestoreDoc())
     }
     return this.docs.get(name);
-  }
-  async set (name, value) {
-    this.values.set(name, value);
-  }
-  async get (name) {
-    return this.values.get(name);
   }
 }
 
@@ -57,16 +55,25 @@ describe('javascript-processor', () => {
     // ensure the cloudcats package.json is the only one
     const codecov = npmModules.doc('codecov');
     const packageFiles = codecov.collection('packageFiles');
-    assert.strictEqual(packageFiles.values.size, 1);
+    assert.strictEqual(packageFiles.size, 1);
 
     // ensure it finds the right value
-    const packageFile = packageFiles.values.get('JustinBeckwith/cloudcats/package.json');
+    const packageFile = packageFiles.get('JustinBeckwith/cloudcats/package.json');
     assert.strictEqual(packageFile.version, '^3.1.0');
   });
 });
 
 describe('npm-events', () => {
-  it('should find all relevant packages', async () => {
 
+  it('should find all relevant packages', async () => {
+    const event = {
+      data: Buffer.from(JSON.stringify(npmEvent), 'utf8')
+    };
+    // const spy = sinon.spy(service, 'updateIfNeeded');
+    await service.npmEvent(event);
+    // assert.strictEqual(spy.calledOnce, true);
   });
+
 });
+
+
